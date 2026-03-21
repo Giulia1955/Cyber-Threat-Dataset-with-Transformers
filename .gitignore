@@ -1,1 +1,11 @@
 .venv/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+data/raw/*.csv
+data/processed/dataset_hf_processado/
+models/
+*.ckpt
+*.safetensors
+*.bin

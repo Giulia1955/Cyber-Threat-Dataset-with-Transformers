@@ -1,11 +1,13 @@
-# --- src/model.py ---
 from transformers import AutoModelForSequenceClassification
 
-def get_model(num_labels):
-    """Função baseada no Passo 4 para carregar o modelo"""
+model_name = "cisco-ai/SecureBERT2.0-base"
+
+def get_model(num_labels, id2label=None, label2id=None):
     model = AutoModelForSequenceClassification.from_pretrained(
-        "ehsanaghaei/SecureBERT",
+        model_name,
         num_labels=num_labels,
-        problem_type="multi_label_classification"
+        problem_type="multi_label_classification",
+        id2label=id2label,
+        label2id=label2id
     )
     return model
