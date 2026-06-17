@@ -1,80 +1,68 @@
-from transformers import AutoTokenizer
-import torch
 import numpy as np
+import torch
 from sklearn.metrics import f1_score, precision_score, recall_score
+from transformers import AutoTokenizer
 
-MODEL_NAME = "cisco-ai/SecureBERT2.0-base"
-# Inicialize FORA da função para carregar apenas uma vez na memória
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+from model import DEFAULT_MODEL_NAME
 
-def preprocess_function(examples):
+_TOKENIZER_CACHE = {}
+
+
+def get_tokenizer(model_name=DEFAULT_MODEL_NAME):
+    if model_name not in _TOKENIZER_CACHE:
+        _TOKENIZER_CACHE[model_name] = AutoTokenizer.from_pretrained(model_name)
+    return _TOKENIZER_CACHE[model_name]
+
+
+def preprocess_function(examples, max_length=128, model_name=DEFAULT_MODEL_NAME):
+    tokenizer = get_tokenizer(model_name=model_name)
     return tokenizer(
-        examples["text"], 
-        padding="max_length", 
-        truncation=True, 
-        max_length=128
+        examples["text"],
+        padding="max_length",
+        truncation=True,
+        max_length=max_length,
     )
 
-# Aproveitando o arquivo utils, vamos criar as métricas para Multi-Label
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    
-    # 1. Aplica a sigmoide para transformar logits em probabilidades (0 a 1)
-    sigmoid = torch.nn.Sigmoid()
-    probs = sigmoid(torch.Tensor(logits))
-    
-    # 2. Define o threshold de 0.5 para decidir se a classe está presente ou não
-    predictions = (probs >= 0.5).int().numpy()
-    
-    # 3. Calcula as métricas (usando 'macro' ou 'micro' para multi-label)
-    f1 = f1_score(labels, predictions, average='macro', zero_division=0)
-    precision = precision_score(labels, predictions, average='macro', zero_division=0)
-    recall = recall_score(labels, predictions, average='macro', zero_division=0)
-    
+
+def build_preprocess_function(model_name=DEFAULT_MODEL_NAME, max_length=128):
+    def _preprocess(examples):
+        return preprocess_function(
+            examples=examples,
+            max_length=max_length,
+            model_name=model_name,
+        )
+
+    return _preprocess
+
+
+def compute_multilabel_metrics_from_logits(logits, labels):
+    logits_tensor = torch.as_tensor(logits, dtype=torch.float32)
+    labels_array = np.asarray(labels)
+    probs = torch.sigmoid(logits_tensor).numpy() #funcao de ativacao aqui --------------------------------
+
+    best_f1 = 0
+    best_thresh = 0.5
+    for thresh in np.arange(0.3, 0.71, 0.05):
+        preds = (probs >= thresh).astype(int)
+        f1 = f1_score(labels_array, preds, average="macro", zero_division=0)
+        if f1 > best_f1:
+            best_f1 = f1
+            best_thresh = thresh
+
+    predictions = (probs >= best_thresh).astype(int)
+
+    f1 = f1_score(labels_array, predictions, average="macro", zero_division=0)
+    precision = precision_score(labels_array, predictions, average="macro", zero_division=0)
+    recall = recall_score(labels_array, predictions, average="macro", zero_division=0)
+
     return {
         "f1_macro": f1,
         "precision_macro": precision,
-        "recall_macro": recall
+        "recall_macro": recall,
+        "best_thresh": best_thresh,
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-'''from transformers import AutoTokenizer
-from sklearn.metrics import f1_score, roc_auc_score, hamming_loss
-import numpy as np
-
-model_name = "cisco-ai/SecureBERT2.0-base"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-def preprocess_function(examples):
-
-    return tokenizer(
-        examples["text"], 
-        padding="max_length", 
-        truncation=True, 
-        max_length=128
-    )
-
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
-    probs = 1 / (1 + np.exp(-logits))
-    predictions = (probs > 0.5).astype(float)
-    
-    return {
-        "f1_micro": f1_score(labels, predictions, average="micro"),
-        "f1_macro": f1_score(labels, predictions, average="macro"),
-        "hamming_loss": hamming_loss(labels, predictions)
-    }'''
+    return compute_multilabel_metrics_from_logits(logits=logits, labels=labels)

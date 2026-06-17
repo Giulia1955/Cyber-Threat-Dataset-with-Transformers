@@ -1,0 +1,5 @@
+{
+  "vocab_size": 50284,
+  "max_length": 128,
+  "padding_idx": 0
+}

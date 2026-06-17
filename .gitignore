@@ -9,3 +9,8 @@ models/
 *.ckpt
 *.safetensors
 *.bin
+.github/
+.env
+MCP-SETUP.md
+.copilot-mcps.yml
+kaggle/
